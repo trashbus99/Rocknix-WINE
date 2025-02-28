@@ -21,7 +21,6 @@
 # Base folders and executable locations
 PORTS_BASE="/storage/roms/ports"
 BASE_WINE_PREFIX="/storage/.wine64-setup"
-WINE_PREFIX="${BASE_WINE_PREFIX}/${GAME_FOLDER}"
 GPTOKEYB="/usr/bin/gptokeyb"  # Adjust this path as needed
 
 # ---------------------------
@@ -64,6 +63,9 @@ GAME_TITLE=$(sed -e 's/^[ \t]*//;s/[ \t]*$//' "$TMPFILE")
 rm -f "$TMPFILE"
 # Create a folder-friendly name (lowercase, no spaces)
 GAME_FOLDER=$(echo "$GAME_TITLE" | tr '[:upper:]' '[:lower:]' | tr -d ' ')
+
+BASE_WINE_PREFIX="/storage/.wine64-setup"
+WINE_PREFIX="${BASE_WINE_PREFIX}/${GAME_FOLDER}"
 
 DEFAULT_EXE="${GAME_TITLE}.exe"
 TMPFILE=$(mktemp)
