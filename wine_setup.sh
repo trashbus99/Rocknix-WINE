@@ -20,7 +20,8 @@
 #
 # Base folders and executable locations
 PORTS_BASE="/storage/roms/ports"
-WINE_PREFIX="/storage/.wine64-setup"
+BASE_WINE_PREFIX="/storage/.wine64-setup"
+WINE_PREFIX="${BASE_WINE_PREFIX}/${GAME_FOLDER}"
 GPTOKEYB="/usr/bin/gptokeyb"  # Adjust this path as needed
 
 # ---------------------------
