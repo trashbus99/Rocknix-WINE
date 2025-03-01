@@ -135,6 +135,7 @@ LAUNCH_SCRIPT="${PORTS_BASE}/${GAME_FOLDER}.sh"
 # ---------------------------
 msgbox "Creating Directories" "Creating ${GAME_DIR} (with subfolders data and config)."
 mkdir -p "${GAME_DIR}/data" "${GAME_DIR}/config"
+mkdir -p /storage/.wine64-setup
 
 cat > "${GPTK_FILE}" << 'EOF'
 back = \"
