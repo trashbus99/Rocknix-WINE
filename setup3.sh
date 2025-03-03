@@ -177,10 +177,7 @@ if [ $? -eq 0 ]; then
         "vcrun2010" "Visual C++ 2010" off \
         "vcrun2012" "Visual C++ 2012" off \
         "vcrun2013" "Visual C++ 2013" off \
-        "vcrun2015" "Visual C++ 2015" off \
-        "vcrun2017" "Visual C++ 2017" off \
-        "vcrun2019" "Visual C++ 2019" off \
-        "vcrun2022" "Visual C++ 2022" off \
+        "vcrun2022" "Visual C++ 2015-2022" off \
         "d3dx9_43" "DirectX9 (d3dx9_43)" off)
 else
     DEP_OPTIONS=""
