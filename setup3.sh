@@ -1,22 +1,18 @@
-#!/bin/bash  
+#!/bin/bash 
 # setup_wine_port.sh
 #
 # This script automates the setup for a generic Wine port for a game.
 # It:
-#   - Prompts for the game title and executable name.
-#   - Optionally asks if the executable is in a subfolder (relative to the data folder).
-#   - Prompts the user to choose a graphics compatibility package (DXVK, vkd3d, or none).
+#   - Prompts the user to either create a new game/Wine prefix or modify an existing one.
+#   - If modifying, scans the bottles directory for existing game prefixes and lets the user select one.
+#   - Prompts for the game title (for new installs), executable name, and subfolder.
+#   - Prompts for graphics compatibility package (DXVK, vkd3d, or none) and related options.
 #   - Offers options for DXVK HUD, async mode, and Wine’s threaded optimizations (Fsync/Esync).
-#   - Asks if additional VC++ dependencies (2008, 2010, 2012, 2013, 2015-2022) and DirectX9 (d3dx9_43) should be installed.
+#   - Prompts the user for installing common VC++ runtimes and DirectX9 (d3dx9_43).
+#   - Prompts for individual keyboard button assignments for controls (back, start, a, b, etc.).
 #   - Optionally fetches the winetricks list and lets the user select additional winetricks packages.
-#   - Creates the directory structure and sets up a dedicated 64-bit Wine bottle (prefix).
-#   - Leaves Gecko and Mono uninstalled so that Wine auto-installs them on first launch;
-#       however, if missing, manual installation of the 64-bit versions will be attempted.
-#   - Installs the chosen graphics dependency and any additional winetricks packages during setup.
-#   - Generates a launch script in __PORTS_BASE__ that sets up the environment and launches the game.
-#
-# When the launch script is executed, Wine will auto-install any missing components
-# (including Gecko and Mono) without user intervention.
+#   - Creates the directory structure and sets up or modifies a dedicated 64-bit Wine bottle (prefix).
+#   - Generates a launch script that sets up the environment and launches the game.
 #
 # Requirements: dialog, curl, winetricks, wine64, box64, and GPTOKEYB.
 #
@@ -47,8 +43,8 @@ for cmd in wine64 box64 "${GPTOKEYB}"; do
     fi
 done
 
-msgbox "Game Port Setup" "This script will create the directory structure and 64-bit Wine bottle for your game port."
-yesno "Proceed?" "This will create folders and files under ${PORTS_BASE} and set up a dedicated Wine bottle. Continue?"
+msgbox "Game Port Setup" "This script will create or modify a Wine prefix for your game port."
+yesno "Proceed?" "This will create folders and files under ${PORTS_BASE} and set up a dedicated Wine prefix. Continue?"
 if [ $? -ne 0 ]; then
     clear
     echo "Setup cancelled."
@@ -56,18 +52,59 @@ if [ $? -ne 0 ]; then
 fi
 
 # ---------------------------
-# User Input: Game Title, Executable, and Subfolder
+# Choose New or Modify Mode
 # ---------------------------
-TMPFILE=$(mktemp)
-dialog --inputbox "Enter the game title (e.g. ExampleGame):" 8 60 2> "$TMPFILE"
-GAME_TITLE=$(sed -e 's/^[ \t]*//;s/[ \t]*$//' "$TMPFILE")
-[ -z "$GAME_TITLE" ] && { clear; echo "No game title provided. Exiting."; rm -f "$TMPFILE"; exit 1; }
-rm -f "$TMPFILE"
-# Create a folder-friendly name (lowercase, no spaces)
-GAME_FOLDER=$(echo "$GAME_TITLE" | tr '[:upper:]' '[:lower:]' | tr -d ' ')
+MODE=$(dialog --stdout --radiolist "Select mode:" 10 60 2 \
+    "new" "Create a new game/Wine prefix" on \
+    "modify" "Modify an existing Wine prefix" off)
 
-WINE_PREFIX="${BASE_WINE_PREFIX}/${GAME_FOLDER}"
+if [ "$MODE" = "modify" ]; then
+    # List existing directories under BASE_WINE_PREFIX
+    if [ ! -d "${BASE_WINE_PREFIX}" ]; then
+        msgbox "Error" "Base Wine prefix directory ${BASE_WINE_PREFIX} not found."
+        exit 1
+    fi
 
+    EXISTING_OPTIONS=()
+    for d in "${BASE_WINE_PREFIX}"/*; do
+        [ -d "$d" ] || continue
+        foldername=$(basename "$d")
+        EXISTING_OPTIONS+=("$foldername" "$foldername" "off")
+    done
+
+    if [ ${#EXISTING_OPTIONS[@]} -eq 0 ]; then
+        msgbox "No Existing Prefixes" "No existing Wine prefixes were found. Switching to new prefix mode."
+        MODE="new"
+    else
+        SELECTED=$(dialog --stdout --radiolist "Select a Wine prefix to modify:" 15 60 5 "${EXISTING_OPTIONS[@]}")
+        if [ -z "$SELECTED" ]; then
+            msgbox "Cancelled" "No selection made. Exiting."
+            exit 1
+        fi
+        GAME_FOLDER="$SELECTED"
+        # For modify, we assume the folder name is the game folder.
+        GAME_TITLE="$GAME_FOLDER"
+        WINE_PREFIX="${BASE_WINE_PREFIX}/${GAME_FOLDER}"
+    fi
+fi
+
+# ---------------------------
+# For New Prefix: Ask Game Title and Executable
+# ---------------------------
+if [ "$MODE" = "new" ]; then
+    TMPFILE=$(mktemp)
+    dialog --inputbox "Enter the game title (e.g. ExampleGame):" 8 60 2> "$TMPFILE"
+    GAME_TITLE=$(sed -e 's/^[ \t]*//;s/[ \t]*$//' "$TMPFILE")
+    [ -z "$GAME_TITLE" ] && { clear; echo "No game title provided. Exiting."; rm -f "$TMPFILE"; exit 1; }
+    rm -f "$TMPFILE"
+    # Create a folder-friendly name (lowercase, no spaces)
+    GAME_FOLDER=$(echo "$GAME_TITLE" | tr '[:upper:]' '[:lower:]' | tr -d ' ')
+    WINE_PREFIX="${BASE_WINE_PREFIX}/${GAME_FOLDER}"
+fi
+
+# ---------------------------
+# Common Prompt: Executable and Subfolder
+# ---------------------------
 DEFAULT_EXE="${GAME_TITLE}.exe"
 TMPFILE=$(mktemp)
 dialog --inputbox "Enter the game executable (with extension):" 8 60 "$DEFAULT_EXE" 2> "$TMPFILE"
@@ -171,14 +208,6 @@ else
 fi
 
 # ---------------------------
-# GPTOKEYB Layout Selection (Optional)
-# ---------------------------
-TMPFILE=$(mktemp)
-dialog --inputbox "Enter GPTOKEYB layout key (optional, e.g. f for assignment):" 8 60 2> "$TMPFILE"
-LAYOUT_KEY=$(sed -e 's/^[ \t]*//;s/[ \t]*$//' "$TMPFILE")
-rm -f "$TMPFILE"
-
-# ---------------------------
 # Set Directory Paths Based on Game Folder
 # ---------------------------
 GAME_DIR="${PORTS_BASE}/${GAME_FOLDER}"
@@ -186,52 +215,42 @@ GPTK_FILE="${GAME_DIR}/${GAME_FOLDER}.gptk"
 LAUNCH_SCRIPT="${PORTS_BASE}/${GAME_FOLDER}.sh"
 
 # ---------------------------
-# Create Directories and GPTK File
+# Create Directories and GPTK File with Keyboard Mapping
 # ---------------------------
 msgbox "Creating Directories" "Creating ${GAME_DIR} (with subfolders data and config)."
 mkdir -p "${GAME_DIR}/data" "${GAME_DIR}/config"
 mkdir -p /storage/.wine64-setup
 
-cat > "${GPTK_FILE}" << 'EOF'
-back = "\"
-start = "\"
-a = "\"
-b = "\"
-x = "\"
-y = "\"
-l1 = "\"
-l2 = "\"
-r1 = "\"
-r2 = "\"
-up = "\"
-down = "\"
-left = "\"
-right = "\"
-left_analog_up = "\"
-left_analog_down = "\"
-left_analog_left = "\"
-left_analog_right = "\"
-right_analog_up = "\"
-right_analog_down = "\"
-right_analog_left = "\"
-right_analog_right = "\"
-EOF
+# Define the list of controls for which to assign keyboard buttons.
+BUTTONS=("back" "start" "a" "b" "x" "y" "l1" "l2" "r1" "r2" "up" "down" "left" "right" "left_analog_up" "left_analog_down" "left_analog_left" "left_analog_right" "right_analog_up" "right_analog_down" "right_analog_left" "right_analog_right")
 
-# Append layout assignment if a key was provided
-if [ -n "$LAYOUT_KEY" ]; then
-    echo "layout = \"${LAYOUT_KEY}\"" >> "${GPTK_FILE}"
-fi
+# Prompt the user for each keyboard assignment and build the GPTK content.
+GPTK_CONTENT=""
+for btn in "${BUTTONS[@]}"; do
+  TMPFILE=$(mktemp)
+  dialog --inputbox "Press keyboard button for the ${btn} button:" 8 60 2> "$TMPFILE"
+  KEY_ASSIGN=$(sed -e 's/^[ \t]*//;s/[ \t]*$//' "$TMPFILE")
+  rm -f "$TMPFILE"
+  GPTK_CONTENT+="${btn} = \"${KEY_ASSIGN}\"\n"
+done
+
+# Write the control mappings to the GPTK file.
+echo -e "$GPTK_CONTENT" > "${GPTK_FILE}"
 
 # ---------------------------
-# Initialize Wine Bottle
+# Initialize or Modify Wine Bottle
 # ---------------------------
-if [ ! -d "${WINE_PREFIX}/drive_c" ]; then
-    msgbox "Initializing Wine Bottle" "Creating 64-bit Wine prefix at ${WINE_PREFIX}.\n\n(Note: A Wine Mono GUI prompt may appear on the main display.)"
-    WINEPREFIX="${WINE_PREFIX}" wine64 wineboot --init
+if [ "$MODE" = "new" ]; then
     if [ ! -d "${WINE_PREFIX}/drive_c" ]; then
-        msgbox "Error" "Failed to initialize Wine prefix. Setup aborted."
-        exit 1
+        msgbox "Initializing Wine Bottle" "Creating 64-bit Wine prefix at ${WINE_PREFIX}.\n\n(Note: A Wine Mono GUI prompt may appear on the main display.)"
+        WINEPREFIX="${WINE_PREFIX}" wine64 wineboot --init
+        if [ ! -d "${WINE_PREFIX}/drive_c" ]; then
+            msgbox "Error" "Failed to initialize Wine prefix. Setup aborted."
+            exit 1
+        fi
     fi
+else
+    msgbox "Modifying Wine Bottle" "Modifying the existing Wine prefix at ${WINE_PREFIX}.\n\n(Note: A Wine Mono GUI prompt may appear on the main display if components are missing.)"
 fi
 
 # Do not install wine-gecko/mono here; let Wine auto-install them on first launch.
@@ -357,7 +376,7 @@ sed -i "s|__STAGING_WRITECOPY__|${STAGING_WRITECOPY}|g" "${LAUNCH_SCRIPT}"
 chmod +x "${LAUNCH_SCRIPT}"
 
 msgbox "Setup Complete" "Setup complete.
-Files created:
+Files created/modified:
 - Launch Script: ${LAUNCH_SCRIPT}
 - Game Folder: ${GAME_DIR} (with subfolders data and config)
 - GPTK File: ${GPTK_FILE}
