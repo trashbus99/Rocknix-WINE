@@ -5,11 +5,12 @@
 # It:
 #   - Prompts the user to either create a new game/Wine prefix or modify an existing one.
 #   - If modifying, scans the bottles directory for existing game prefixes and lets the user select one.
-#   - Prompts for the game title (for new installs), executable name, and subfolder.
-#   - Prompts for graphics compatibility package (DXVK, vkd3d, or none) and related options.
-#   - Offers options for DXVK HUD, async mode, and Wine’s threaded optimizations (Fsync/Esync).
+#   - For new installs, prompts for the game title, executable name, and subfolder.
+#   - Prompts for a graphics compatibility package (DXVK, vkd3d, or none) and related options.
+#   - Offers options for DXVK HUD (default off), DXVK async mode, and separate prompts for enabling ESYNC and FSYNC.
 #   - Prompts the user for installing common VC++ runtimes and DirectX9 (d3dx9_43).
-#   - Prompts for individual keyboard button assignments for controls (back, start, a, b, etc.).
+#   - Optionally asks if the user wants to manually assign keyboard button mappings (for controls like back, start, a, b, etc.).
+#       - If skipped, a default GPTK file with empty mappings is created.
 #   - Optionally fetches the winetricks list and lets the user select additional winetricks packages.
 #   - Creates the directory structure and sets up or modifies a dedicated 64-bit Wine bottle (prefix).
 #   - Generates a launch script that sets up the environment and launches the game.
@@ -135,10 +136,10 @@ CHOICE=$(dialog --stdout --radiolist "Select graphics compatibility package:" 10
 # ---------------------------
 # DXVK and Wine Environment Options
 # ---------------------------
-# Ask for DXVK HUD option (0 = off, 1 = on)
+# DXVK HUD selection with default off.
 HUD_CHOICE=$(dialog --stdout --radiolist "DXVK HUD:" 10 60 2 \
-    "1" "Enable DXVK HUD" on \
-    "0" "Disable DXVK HUD" off)
+    "1" "Enable DXVK HUD" off \
+    "0" "Disable DXVK HUD" on)
 [ -z "$HUD_CHOICE" ] && HUD_CHOICE=0
 
 # Ask for DXVK Async Mode option (improves shader compilation)
@@ -149,13 +150,20 @@ else
     DXVK_ASYNC=0
 fi
 
-# Ask for Wine's Threaded Optimizations (Fsync and Esync)
-yesno "Wine Threaded Optimizations" "Do you want to enable Wine's threaded optimizations (Fsync/Esync) to reduce latency?"
+# ---------------------------
+# Separate Prompts for ESYNC and FSYNC
+# ---------------------------
+yesno "ESYNC" "Do you want to enable ESYNC (Wine's eventfd-based synchronization)?"
 if [ $? -eq 0 ]; then
     STAGING_SHARED_MEMORY=1
-    STAGING_WRITECOPY=1
 else
     STAGING_SHARED_MEMORY=0
+fi
+
+yesno "FSYNC" "Do you want to enable FSYNC (Wine's file descriptor based synchronization)?"
+if [ $? -eq 0 ]; then
+    STAGING_WRITECOPY=1
+else
     STAGING_WRITECOPY=0
 fi
 
@@ -215,24 +223,31 @@ GPTK_FILE="${GAME_DIR}/${GAME_FOLDER}.gptk"
 LAUNCH_SCRIPT="${PORTS_BASE}/${GAME_FOLDER}.sh"
 
 # ---------------------------
-# Create Directories and GPTK File with Keyboard Mapping
+# Create Directories
 # ---------------------------
 msgbox "Creating Directories" "Creating ${GAME_DIR} (with subfolders data and config)."
 mkdir -p "${GAME_DIR}/data" "${GAME_DIR}/config"
 mkdir -p /storage/.wine64-setup
 
-# Define the list of controls for which to assign keyboard buttons.
-BUTTONS=("back" "start" "a" "b" "x" "y" "l1" "l2" "r1" "r2" "up" "down" "left" "right" "left_analog_up" "left_analog_down" "left_analog_left" "left_analog_right" "right_analog_up" "right_analog_down" "right_analog_left" "right_analog_right")
-
-# Prompt the user for each keyboard assignment and build the GPTK content.
-GPTK_CONTENT=""
-for btn in "${BUTTONS[@]}"; do
-  TMPFILE=$(mktemp)
-  dialog --inputbox "Press keyboard button for the ${btn} button:" 8 60 2> "$TMPFILE"
-  KEY_ASSIGN=$(sed -e 's/^[ \t]*//;s/[ \t]*$//' "$TMPFILE")
-  rm -f "$TMPFILE"
-  GPTK_CONTENT+="${btn} = \"${KEY_ASSIGN}\"\n"
-done
+# ---------------------------
+# Keyboard Mapping: Manual or Default?
+# ---------------------------
+yesno "Keyboard Mapping" "Do you want to manually assign keyboard button mappings?\n\n(If you choose 'No', default empty mappings will be created.)"
+if [ $? -eq 0 ]; then
+    # Define the list of controls for which to assign keyboard buttons.
+    BUTTONS=("back" "start" "a" "b" "x" "y" "l1" "l2" "r1" "r2" "up" "down" "left" "right" "left_analog_up" "left_analog_down" "left_analog_left" "left_analog_right" "right_analog_up" "right_analog_down" "right_analog_left" "right_analog_right")
+    GPTK_CONTENT=""
+    for btn in "${BUTTONS[@]}"; do
+      TMPFILE=$(mktemp)
+      dialog --inputbox "Press keyboard button for the ${btn} button:" 8 60 2> "$TMPFILE"
+      KEY_ASSIGN=$(sed -e 's/^[ \t]*//;s/[ \t]*$//' "$TMPFILE")
+      rm -f "$TMPFILE"
+      GPTK_CONTENT+="${btn} = \"${KEY_ASSIGN}\"\n"
+    done
+else
+    # Create a default GPTK file with empty mappings.
+    GPTK_CONTENT="back = \"\"\nstart = \"\"\na = \"\"\nb = \"\"\nx = \"\"\ny = \"\"\nl1 = \"\"\nl2 = \"\"\nr1 = \"\"\nr2 = \"\"\nup = \"\"\ndown = \"\"\nleft = \"\"\nright = \"\"\nleft_analog_up = \"\"\nleft_analog_down = \"\"\nleft_analog_left = \"\"\nleft_analog_right = \"\"\nright_analog_up = \"\"\nright_analog_down = \"\"\nright_analog_left = \"\"\nright_analog_right = \"\""
+fi
 
 # Write the control mappings to the GPTK file.
 echo -e "$GPTK_CONTENT" > "${GPTK_FILE}"
