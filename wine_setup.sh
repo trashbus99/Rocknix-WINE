@@ -405,4 +405,4 @@ Files created/modified:
 
 Please copy your game data into the 'data' folder before launching."
 clear
-echo "Setup complete. Run: ${LAUNCH_SCRIPT}"
+echo "Setup complete. Run: ${LAUNCH_SCRIPT} after you copy your game over to the data folder"
