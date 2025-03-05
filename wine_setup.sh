@@ -214,7 +214,7 @@ if [ $? -eq 0 ]; then
             desc=$(echo "$line" | cut -d' ' -f2-)
             ADD_OPTIONS+=("$pkg" "$desc" "off")
         done < "$WT_PARSED"
-        ADD_SELECTION=$(dialog --stdout --checklist "Select additional winetricks packages:" 20 70 10 "${ADD_OPTIONS[@]}")
+        ADD_SELECTION=$(dialog --stdout --checklist "Select additional winetricks packages:" 30 85 10 "${ADD_OPTIONS[@]}")
         ADDITIONAL_WT=$(echo $ADD_SELECTION | tr -d '"')
         rm -f "$WT_PARSED" "$WT_TEMP"
     fi
