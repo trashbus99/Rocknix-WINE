@@ -181,23 +181,10 @@ fi
 # Additional Settings for Unity/Other Games (Optional)
 # ---------------------------
 UNITY_OPT=0
-yesno "Unity/Other Game Optimizations" "Would you like to apply additional optimal settings for Unity games (or similar titles)?\n\nThis will set extra BOX64 environment variables."
+yesno "Unity/Other Game Optimizations" "Would you like to apply additional optimal settings for Unity games (or similar titles)?\n\nThis will write extra BOX64 environment variable settings to the launcher script."
 if [ $? -eq 0 ]; then
     UNITY_OPT=1
-    # Set the variables in the current shell (if needed during setup)
-    export BOX64_DYNAREC_SAFEFLAGS=1
-    export BOX64_DYNAREC_FASTNAN=1
-    export BOX64_DYNAREC_FASTROUND=1
-    export BOX64_DYNAREC_X87DOUBLE=0
-    export BOX64_DYNAREC_BIGBLOCK=3
-    export BOX64_DYNAREC_STRONGMEM=0
-    export BOX64_DYNAREC_FORWARD=512
-    export BOX64_DYNAREC_CALLRET=1
-    export BOX64_DYNAREC_WAIT=1
-    export BOX64_AVX=0
-    export BOX64_MAXCPU=8
-    export BOX64_UNITYPLAYER=1
-    msgbox "Additional Settings" "Extra settings optimized for Unity games have been applied."
+    msgbox "Additional Settings" "Extra BOX64 settings will be written to your launcher script."
 fi
 
 # ---------------------------
@@ -375,6 +362,9 @@ export STAGING_SHARED_MEMORY=__STAGING_SHARED_MEMORY__
 export STAGING_WRITECOPY=__STAGING_WRITECOPY__
 __BOX64_EXTRA_SETTINGS__
 
+# Insert extra BOX64 settings here if applicable.
+# (They will be inserted automatically if Unity optimizations are enabled.)
+
 # Check if pm_message exists.
 if ! type pm_message &>/dev/null; then
     echo "Warning: pm_message function is missing. Skipping dependency message."
@@ -422,29 +412,28 @@ sed -i "s|__STAGING_SHARED_MEMORY__|${STAGING_SHARED_MEMORY}|g" "${LAUNCH_SCRIPT
 sed -i "s|__STAGING_WRITECOPY__|${STAGING_WRITECOPY}|g" "${LAUNCH_SCRIPT}"
 
 # ---------------------------
-# Insert Extra BOX64 Settings (if selected) into the Launch Script
+# Remove the grouped placeholder.
+# ---------------------------
+sed -i "s|__BOX64_EXTRA_SETTINGS__||g" "${LAUNCH_SCRIPT}"
+
+# ---------------------------
+# Insert extra BOX64 settings before the game launch.
 # ---------------------------
 if [ "$UNITY_OPT" -eq 1 ]; then
-  EXTRA_SETTINGS=$(cat << 'EOL'
-export BOX64_DYNAREC_SAFEFLAGS=1
-export BOX64_DYNAREC_FASTNAN=1
-export BOX64_DYNAREC_FASTROUND=1
-export BOX64_DYNAREC_X87DOUBLE=0
-export BOX64_DYNAREC_BIGBLOCK=3
-export BOX64_DYNAREC_STRONGMEM=0
-export BOX64_DYNAREC_FORWARD=512
-export BOX64_DYNAREC_CALLRET=1
-export BOX64_DYNAREC_WAIT=1
-export BOX64_AVX=0
-export BOX64_MAXCPU=8
-export BOX64_UNITYPLAYER=1
-EOL
-)
-else
-  EXTRA_SETTINGS=""
+    sed -i "/# Launch the game:/i \
+export BOX64_DYNAREC_SAFEFLAGS=1\n\
+export BOX64_DYNAREC_FASTNAN=1\n\
+export BOX64_DYNAREC_FASTROUND=1\n\
+export BOX64_DYNAREC_X87DOUBLE=0\n\
+export BOX64_DYNAREC_BIGBLOCK=3\n\
+export BOX64_DYNAREC_STRONGMEM=0\n\
+export BOX64_DYNAREC_FORWARD=512\n\
+export BOX64_DYNAREC_CALLRET=1\n\
+export BOX64_DYNAREC_WAIT=1\n\
+export BOX64_AVX=0\n\
+export BOX64_MAXCPU=8\n\
+export BOX64_UNITYPLAYER=1" "${LAUNCH_SCRIPT}"
 fi
-
-sed -i "s|__BOX64_EXTRA_SETTINGS__|${EXTRA_SETTINGS}|g" "${LAUNCH_SCRIPT}"
 
 chmod +x "${LAUNCH_SCRIPT}"
 
