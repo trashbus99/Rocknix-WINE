@@ -176,28 +176,15 @@ if [ $? -eq 0 ]; then
 else
     STAGING_WRITECOPY=0
 fi
-# ---------------------------
-# Separate Prompts for ESYNC and FSYNC
-# ---------------------------
-yesno "ESYNC" "Do you want to enable ESYNC (Wine's eventfd-based synchronization)?"
-if [ $? -eq 0 ]; then
-    STAGING_SHARED_MEMORY=1
-else
-    STAGING_SHARED_MEMORY=0
-fi
-
-yesno "FSYNC" "Do you want to enable FSYNC (Wine's file descriptor–based synchronization)?"
-if [ $? -eq 0 ]; then
-    STAGING_WRITECOPY=1
-else
-    STAGING_WRITECOPY=0
-fi
 
 # ---------------------------
-# Additional Settings for Unity Games (Optional)
+# Additional Settings for Unity/Other Games (Optional)
 # ---------------------------
-yesno "Unity/Other Game Optimizations" "Would you like to apply additional optimal settings for Unity games (or similar titles)?\n\nThis will set environment variables such as BOX64_DYNAREC_SAFEFLAGS, BOX64_DYNAREC_FASTNAN, and others."
+UNITY_OPT=0
+yesno "Unity/Other Game Optimizations" "Would you like to apply additional optimal settings for Unity games (or similar titles)?\n\nThis will set extra BOX64 environment variables."
 if [ $? -eq 0 ]; then
+    UNITY_OPT=1
+    # Set the variables in the current shell (if needed during setup)
     export BOX64_DYNAREC_SAFEFLAGS=1
     export BOX64_DYNAREC_FASTNAN=1
     export BOX64_DYNAREC_FASTROUND=1
@@ -210,10 +197,8 @@ if [ $? -eq 0 ]; then
     export BOX64_AVX=0
     export BOX64_MAXCPU=8
     export BOX64_UNITYPLAYER=1
-    msgbox "Additional Settings" "Additional settings optimized for Unity games have been applied."
+    msgbox "Additional Settings" "Extra settings optimized for Unity games have been applied."
 fi
-
-
 
 # ---------------------------
 # VC++ and DirectX9 Dependencies Prompt
@@ -379,7 +364,7 @@ cd "$GAMEDIR"
 chmod +x -R "$GAMEDIR"/*
 
 # Environment variable exports.
-export SDL_GAMECONTROLLERCONFIG="\$sdl_controllerconfig"
+export SDL_GAMECONTROLLERCONFIG="$sdl_controllerconfig"
 export WINEPREFIX="__WINE_PREFIX__"
 export WINEDEBUG=-all
 
@@ -388,6 +373,7 @@ export DXVK_HUD=__DXVK_HUD__
 export DXVK_ASYNC=__DXVK_ASYNC__
 export STAGING_SHARED_MEMORY=__STAGING_SHARED_MEMORY__
 export STAGING_WRITECOPY=__STAGING_WRITECOPY__
+__BOX64_EXTRA_SETTINGS__
 
 # Check if pm_message exists.
 if ! type pm_message &>/dev/null; then
@@ -421,7 +407,9 @@ __GPTOKEYB__ "__EXE_NAME__" -c "./__GAME_FOLDER__.gptk" &
 box64 wine64 "$GAMEDIR/data/__EXE_PATH__"
 EOF
 
-# Replace placeholders in the launch script.
+# ---------------------------
+# Replace Placeholders in the Launch Script
+# ---------------------------
 sed -i "s|__PORTS_BASE__|${PORTS_BASE}|g" "${LAUNCH_SCRIPT}"
 sed -i "s|__WINE_PREFIX__|${WINE_PREFIX}|g" "${LAUNCH_SCRIPT}"
 sed -i "s|__GAME_FOLDER__|${GAME_FOLDER}|g" "${LAUNCH_SCRIPT}"
@@ -432,6 +420,31 @@ sed -i "s|__DXVK_HUD__|${HUD_CHOICE}|g" "${LAUNCH_SCRIPT}"
 sed -i "s|__DXVK_ASYNC__|${DXVK_ASYNC}|g" "${LAUNCH_SCRIPT}"
 sed -i "s|__STAGING_SHARED_MEMORY__|${STAGING_SHARED_MEMORY}|g" "${LAUNCH_SCRIPT}"
 sed -i "s|__STAGING_WRITECOPY__|${STAGING_WRITECOPY}|g" "${LAUNCH_SCRIPT}"
+
+# ---------------------------
+# Insert Extra BOX64 Settings (if selected) into the Launch Script
+# ---------------------------
+if [ "$UNITY_OPT" -eq 1 ]; then
+  EXTRA_SETTINGS=$(cat << 'EOL'
+export BOX64_DYNAREC_SAFEFLAGS=1
+export BOX64_DYNAREC_FASTNAN=1
+export BOX64_DYNAREC_FASTROUND=1
+export BOX64_DYNAREC_X87DOUBLE=0
+export BOX64_DYNAREC_BIGBLOCK=3
+export BOX64_DYNAREC_STRONGMEM=0
+export BOX64_DYNAREC_FORWARD=512
+export BOX64_DYNAREC_CALLRET=1
+export BOX64_DYNAREC_WAIT=1
+export BOX64_AVX=0
+export BOX64_MAXCPU=8
+export BOX64_UNITYPLAYER=1
+EOL
+)
+else
+  EXTRA_SETTINGS=""
+fi
+
+sed -i "s|__BOX64_EXTRA_SETTINGS__|${EXTRA_SETTINGS}|g" "${LAUNCH_SCRIPT}"
 
 chmod +x "${LAUNCH_SCRIPT}"
 
