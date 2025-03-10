@@ -5,13 +5,17 @@
 # It:
 #   - Prompts the user to either create a new game/Wine prefix or modify an existing one.
 #   - Offers an option to use a dedicated Wine prefix (less potential conflicts) or a general shared prefix (less bloat).
-#   - For new installs, prompts for the game title, the executable filename (specifically the game-launching exe; do not include a folder), and a subfolder (if applicable).
-#   - Prompts for a graphics compatibility package (DXVK, vkd3d, or none) and related options.
+#   - For new installs, prompts for the game title, the executable filename (specifically the game-launching exe; do not include any folder), and a subfolder (if applicable).
+#   - Prompts for a graphics compatibility package with the choice to install latest dxvk or legacy dxvk2041 (due to performance regressions), vkd3d, or none.
 #   - Offers options for DXVK HUD (default off), async mode, and separate yes/no prompts for ESYNC and FSYNC.
+#   - Provides a single radiolist for the Pulse Audio option:
+#         * "nopulse" – Do not use Pulse Audio.
+#         * "pulse60" – Use winetricks sound=pulse with 60 ms latency.
+#         * "pulse90" – Use winetricks sound=pulse with 90 ms latency.
 #   - Prompts for installing common VC++ runtimes and DirectX9 (d3dx9_43).
 #   - Optionally asks if the user wants to manually assign keyboard button mappings (for controls like back, start, a, b, etc.).
 #       - If skipped, a default GPTK file with empty mappings is created.
-#   - Optionally fetches the winetricks list and lets the user select additional winetricks packages.
+#   - Then asks if the user wants to install additional winetricks packages.
 #   - Creates the directory structure and sets up (or modifies) a dedicated/shared 64-bit Wine prefix.
 #   - Generates a launch script that sets up the environment and launches the game.
 #
@@ -137,10 +141,12 @@ EXE_PATH="${SUBFOLDER:+${SUBFOLDER}/}${EXE_NAME}"
 # ---------------------------
 # Graphics Dependency Selection
 # ---------------------------
-CHOICE=$(dialog --stdout --radiolist "Select graphics compatibility package:" 10 60 3 \
-    "dxvk" "Install DXVK (DirectX to Vulkan)" on \
-    "vkd3d" "Install vkd3d (DirectX 12 to Vulkan)" off \
-    "none" "Install neither" off)
+# Allow user to choose between latest dxvk and dxvk2041 (fixes regressions), vkd3d, or neither.
+CHOICE=$(dialog --stdout --radiolist "Select graphics compatibility package:" 15 90 7 \
+    "dxvk"     "Install latest DXVK (Newer regressions have shown ~-5FPS)" off \
+    "dxvk2041" "Install DXVK 2041 (fixes regression in later builds)" on \
+    "vkd3d"    "Install vkd3d (DirectX 12 to Vulkan)" off \
+    "none"     "Install neither" off)
 [ -z "$CHOICE" ] && CHOICE="none"
 
 # ---------------------------
@@ -187,6 +193,22 @@ if [ $? -eq 0 ]; then
     msgbox "Additional Settings" "Extra BOX64 settings will be written to your launcher script."
 fi
 
+
+# ---------------------------
+# Pulse Audio Option (ENSURES IT SHOWS)
+# ---------------------------
+SOUND_OPTION=$(dialog --stdout --radiolist "Pulse Audio Option" 10 60 3 \
+    "nopulse" "Do not use Pulse Audio" on \
+    "pulse60" "Use winetricks sound=pulse with 60 ms latency" off \
+    "pulse90" "Use winetricks sound=pulse with 90 ms latency" off)
+
+# If the user cancels or doesn't select anything, default to "nopulse"
+if [ -z "$SOUND_OPTION" ]; then
+    SOUND_OPTION="nopulse"
+fi
+
+
+
 # ---------------------------
 # VC++ and DirectX9 Dependencies Prompt
 # ---------------------------
@@ -202,6 +224,14 @@ if [ $? -eq 0 ]; then
 else
     DEP_OPTIONS=""
 fi
+
+
+
+
+
+
+
+
 
 # ---------------------------
 # Additional Winetricks Packages (Optional)
@@ -292,7 +322,7 @@ fi
 # ---------------------------
 if [ "$CHOICE" != "none" ]; then
     WINEPREFIX="${WINE_PREFIX}" winetricks -q "$CHOICE"
-    if [ "$CHOICE" = "dxvk" ]; then
+    if [ "$CHOICE" = "dxvk" ] || [ "$CHOICE" = "dxvk2041" ]; then
         if [ ! -f "$WINE_PREFIX/drive_c/windows/system32/dxgi.dll" ]; then
             msgbox "Error" "DXVK installation failed or dxgi.dll is missing. Game may not work properly."
         fi
@@ -362,8 +392,8 @@ export STAGING_SHARED_MEMORY=__STAGING_SHARED_MEMORY__
 export STAGING_WRITECOPY=__STAGING_WRITECOPY__
 __BOX64_EXTRA_SETTINGS__
 
-# Insert extra BOX64 settings here if applicable.
-# (They will be inserted automatically if Unity optimizations are enabled.)
+# Sound setup
+__SOUND_SETUP__
 
 # Check if pm_message exists.
 if ! type pm_message &>/dev/null; then
@@ -433,6 +463,25 @@ export BOX64_DYNAREC_WAIT=1\n\
 export BOX64_AVX=0\n\
 export BOX64_MAXCPU=8\n\
 export BOX64_UNITYPLAYER=1" "${LAUNCH_SCRIPT}"
+fi
+
+# ---------------------------
+# Insert Sound Setup Commands
+# ---------------------------
+SOUND_CMD=""
+if [ "$SOUND_OPTION" = "pulse60" ]; then
+    SOUND_CMD+="WINEPREFIX=\"${WINE_PREFIX}\" winetricks -q sound=pulse\n"
+    SOUND_CMD+="export PULSE_LATENCY_MSEC=60\n"
+elif [ "$SOUND_OPTION" = "pulse90" ]; then
+    SOUND_CMD+="WINEPREFIX=\"${WINE_PREFIX}\" winetricks -q sound=pulse\n"
+    SOUND_CMD+="export PULSE_LATENCY_MSEC=90\n"
+fi
+
+if [ -n "$SOUND_CMD" ]; then
+    # Use sed to replace the placeholder with the generated commands.
+    sed -i "s|__SOUND_SETUP__|${SOUND_CMD}|g" "${LAUNCH_SCRIPT}"
+else
+    sed -i "s|__SOUND_SETUP__||g" "${LAUNCH_SCRIPT}"
 fi
 
 chmod +x "${LAUNCH_SCRIPT}"
