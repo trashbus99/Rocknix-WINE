@@ -197,7 +197,7 @@ fi
 # ---------------------------
 # Pulse Audio Option (ENSURES IT SHOWS)
 # ---------------------------
-SOUND_OPTION=$(dialog --stdout --radiolist "Pulse Audio Option" 10 60 3 \
+SOUND_OPTION=$(dialog --stdout --radiolist "Pulse Audio Option" 10 90 3 \
     "nopulse" "Do not use Pulse Audio" on \
     "pulse60" "Use winetricks sound=pulse with 60 ms latency" off \
     "pulse90" "Use winetricks sound=pulse with 90 ms latency" off)
