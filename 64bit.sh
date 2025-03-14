@@ -1,4 +1,4 @@
-#!/bin/bash 
+#!/bin/bash
 # setup_wine_port.sh
 #
 # This script automates the setup for a generic Wine port for a game.
@@ -8,13 +8,9 @@
 #   - For new installs, prompts for the game title, the executable filename (specifically the game-launching exe; do not include any folder), and a subfolder (if applicable).
 #   - Prompts for a graphics compatibility package with the choice to install latest dxvk or legacy dxvk2041 (due to performance regressions), vkd3d, or none.
 #   - Offers options for DXVK HUD (default off), async mode, and separate yes/no prompts for ESYNC and FSYNC.
-#   - Provides a single radiolist for the Pulse Audio option:
-#         * "nopulse" – Do not use Pulse Audio.
-#         * "pulse60" – Use winetricks sound=pulse with 60 ms latency.
-#         * "pulse90" – Use winetricks sound=pulse with 90 ms latency.
+#   - Provides a radiolist for the Pulse Audio option.
 #   - Prompts for installing common VC++ runtimes and DirectX9 (d3dx9_43).
-#   - Optionally asks if the user wants to manually assign keyboard button mappings (for controls like back, start, a, b, etc.).
-#       - If skipped, a default GPTK file with empty mappings is created.
+#   - Optionally asks if the user wants to manually assign keyboard button mappings.
 #   - Then asks if the user wants to install additional winetricks packages.
 #   - Creates the directory structure and sets up (or modifies) a dedicated/shared 64-bit Wine prefix.
 #   - Generates a launch script that sets up the environment and launches the game.
@@ -23,9 +19,7 @@
 #
 # Base folders and executable locations
 PORTS_BASE="/storage/roms/ports"
-# Default dedicated Wine prefixes go here:
 BASE_WINE_PREFIX="/storage/.wine64-setup"
-# General (shared) Wine prefix location:
 GENERAL_WINE_PREFIX="/storage/.wine64-shared"
 GPTOKEYB="/usr/bin/gptokeyb"  # Adjust this path as needed
 
@@ -50,6 +44,50 @@ for cmd in wine64 box64 "${GPTOKEYB}"; do
         exit 1
     fi
 done
+
+# ---------------------------
+# Custom Wine Runner Option
+# ---------------------------
+CUSTOM_OPTION=$(dialog --stdout --radiolist "Wine Runner Selection" 10 60 2 \
+    "default" "Use system wine64/box64" on \
+    "custom" "Use a custom wine build from /storage/winecustom" off)
+
+if [ "$CUSTOM_OPTION" = "custom" ]; then
+    # Offer to download custom runners first.
+    yesno "Download Custom Runners" "Would you like to download custom wine runners?\n\nThis will run:\n\ncurl -L https://github.com/trashbus99/Rocknix-WINE/raw/main/custom.sh | bash"
+    if [ $? -eq 0 ]; then
+         curl -L https://github.com/trashbus99/Rocknix-WINE/raw/main/custom.sh | bash
+         dialog --msgbox "Custom runners downloaded. Continuing..." 7 50
+    fi
+
+    CUSTOM_OPTIONS=()
+    # Scan /storage/winecustom for directories with a bin/wine executable.
+    for d in /storage/winecustom/*; do
+         if [ -d "$d/bin" ] && [ -x "$d/bin/wine" ]; then
+             foldername=$(basename "$d")
+             CUSTOM_OPTIONS+=("$d/bin/wine" "$foldername" off)
+         fi
+    done
+    if [ ${#CUSTOM_OPTIONS[@]} -eq 0 ]; then
+         dialog --msgbox "No custom wine builds found in /storage/winecustom. Using system wine64/box64." 10 60
+         CUSTOM_OPTION="default"
+    else
+         CHOSEN_RUNNER=$(dialog --stdout --radiolist "Select custom wine runner:" 15 80 7 "${CUSTOM_OPTIONS[@]}")
+         if [ -z "$CHOSEN_RUNNER" ]; then
+             dialog --msgbox "No selection made. Using system wine64/box64." 10 60
+             CUSTOM_OPTION="default"
+         else
+             WINE_BIN="$CHOSEN_RUNNER"
+         fi
+    fi
+fi
+
+# Define RUN_COMMAND to always use box64.
+if [ "$CUSTOM_OPTION" = "custom" ]; then
+    RUN_COMMAND="box64 ${WINE_BIN}"
+else
+    RUN_COMMAND="box64 wine64"
+fi
 
 msgbox "Game Port Setup" "This script will create or modify a Wine prefix for your game port."
 yesno "Proceed?" "This will create folders and files under ${PORTS_BASE} and set up a dedicated/shared Wine prefix. Continue?"
@@ -108,10 +146,8 @@ if [ "$MODE" = "new" ]; then
     # Ask if user wants a dedicated prefix or a general (shared) one.
     yesno "Prefix Mode" "Do you want to use a dedicated Wine prefix for this game?\n\nDedicated prefixes reduce conflicts, while a general prefix reduces bloat."
     if [ $? -eq 0 ]; then
-        # Use dedicated prefix:
         WINE_PREFIX="${BASE_WINE_PREFIX}/${GAME_FOLDER}"
     else
-        # Use general shared prefix:
         WINE_PREFIX="${GENERAL_WINE_PREFIX}"
     fi
 fi
@@ -119,7 +155,6 @@ fi
 # ---------------------------
 # Common Prompt: Executable and Subfolder
 # ---------------------------
-# Clarify: Enter only the executable filename that launches the game (do not include any folder path).
 DEFAULT_EXE="${GAME_TITLE}.exe"
 TMPFILE=$(mktemp)
 dialog --inputbox "Enter the game executable filename (with extension, e.g. game.exe):" 8 60 "$DEFAULT_EXE" 2> "$TMPFILE"
@@ -141,7 +176,6 @@ EXE_PATH="${SUBFOLDER:+${SUBFOLDER}/}${EXE_NAME}"
 # ---------------------------
 # Graphics Dependency Selection
 # ---------------------------
-# Allow user to choose between latest dxvk and dxvk2041 (fixes regressions), vkd3d, or neither.
 CHOICE=$(dialog --stdout --radiolist "Select graphics compatibility package:" 15 90 7 \
     "dxvk"     "Install latest DXVK (Newer regressions have shown ~-5FPS)" off \
     "dxvk2041" "Install DXVK 2041 (fixes regression in later builds)" on \
@@ -152,13 +186,11 @@ CHOICE=$(dialog --stdout --radiolist "Select graphics compatibility package:" 15
 # ---------------------------
 # DXVK and Wine Environment Options
 # ---------------------------
-# DXVK HUD selection (default off).
 HUD_CHOICE=$(dialog --stdout --radiolist "DXVK HUD:" 10 60 2 \
     "1" "Enable DXVK HUD" off \
     "0" "Disable DXVK HUD" on)
 [ -z "$HUD_CHOICE" ] && HUD_CHOICE=0
 
-# Ask for DXVK Async Mode option.
 yesno "DXVK Async Mode" "Do you want to enable DXVK/VKD3D async mode? (This may reduce shader stutter)"
 if [ $? -eq 0 ]; then
     DXVK_ASYNC=1
@@ -193,21 +225,16 @@ if [ $? -eq 0 ]; then
     msgbox "Additional Settings" "Extra BOX64 settings will be written to your launcher script."
 fi
 
-
 # ---------------------------
-# Pulse Audio Option (ENSURES IT SHOWS)
+# Pulse Audio Option
 # ---------------------------
 SOUND_OPTION=$(dialog --stdout --radiolist "Pulse Audio Option" 10 90 3 \
     "nopulse" "Do not use Pulse Audio" on \
     "pulse60" "Use winetricks sound=pulse with 60 ms latency" off \
     "pulse90" "Use winetricks sound=pulse with 90 ms latency" off)
-
-# If the user cancels or doesn't select anything, default to "nopulse"
 if [ -z "$SOUND_OPTION" ]; then
     SOUND_OPTION="nopulse"
 fi
-
-
 
 # ---------------------------
 # VC++ and DirectX9 Dependencies Prompt
@@ -225,14 +252,6 @@ else
     DEP_OPTIONS=""
 fi
 
-
-
-
-
-
-
-
-
 # ---------------------------
 # Additional Winetricks Packages (Optional)
 # ---------------------------
@@ -246,7 +265,6 @@ if [ $? -eq 0 ]; then
         ADDITIONAL_WT=""
     else
         WT_PARSED=$(mktemp)
-        # Remove section headers and blank lines.
         grep -v '^=====' "$WT_TEMP" | grep -v '^[[:space:]]*$' > "$WT_PARSED"
         ADD_OPTIONS=()
         while IFS= read -r line; do
@@ -281,7 +299,6 @@ mkdir -p /storage/.wine64-setup
 # ---------------------------
 yesno "Keyboard Mapping" "Do you want to manually assign keyboard button mappings?\n\n(If you choose 'No', default empty mappings will be created.)"
 if [ $? -eq 0 ]; then
-    # Define the list of controls for which to assign keyboard buttons.
     BUTTONS=("back" "start" "a" "b" "x" "y" "l1" "l2" "r1" "r2" "up" "down" "left" "right" "left_analog_up" "left_analog_down" "left_analog_left" "left_analog_right" "right_analog_up" "right_analog_down" "right_analog_left" "right_analog_right")
     GPTK_CONTENT=""
     for btn in "${BUTTONS[@]}"; do
@@ -292,11 +309,9 @@ if [ $? -eq 0 ]; then
       GPTK_CONTENT+="${btn} = \"${KEY_ASSIGN}\"\n"
     done
 else
-    # Create a default GPTK file with empty mappings.
     GPTK_CONTENT="back = \"\"\nstart = \"\"\na = \"\"\nb = \"\"\nx = \"\"\ny = \"\"\nl1 = \"\"\nl2 = \"\"\nr1 = \"\"\nr2 = \"\"\nup = \"\"\ndown = \"\"\nleft = \"\"\nright = \"\"\nleft_analog_up = \"\"\nleft_analog_down = \"\"\nleft_analog_left = \"\"\nleft_analog_right = \"\"\nright_analog_up = \"\"\nright_analog_down = \"\"\nright_analog_left = \"\"\nright_analog_right = \"\""
 fi
 
-# Write the control mappings to the GPTK file.
 echo -e "$GPTK_CONTENT" > "${GPTK_FILE}"
 
 # ---------------------------
@@ -338,7 +353,6 @@ if [ -n "$DEP_OPTIONS" ]; then
     done
 fi
 
-# Install additional winetricks packages if selected.
 if [ -n "$ADDITIONAL_WT" ]; then
     for pkg in $ADDITIONAL_WT; do
          WINEPREFIX="${WINE_PREFIX}" winetricks -q "$pkg"
@@ -360,49 +374,40 @@ else
   controlfolder="/roms/ports/PortMaster"
 fi
 
-# Source control files if available
 source "${controlfolder}/control.txt"
 [ -f "${controlfolder}/mod_${CFW_NAME}.txt" ] && source "${controlfolder}/mod_${CFW_NAME}.txt"
 get_controls
 
-# Variables
 GAMEDIR="__PORTS_BASE__/__GAME_FOLDER__"
 WINEPREFIX="__WINE_PREFIX__"
 
-# Ensure the game directory exists.
 if [ ! -d "$GAMEDIR" ]; then
   echo "Error: Game directory missing ($GAMEDIR). Please check your installation."
   exit 1
 fi
 
-# Change to game directory and prepare logging.
 cd "$GAMEDIR"
 > "$GAMEDIR/log.txt" && exec > >(tee "$GAMEDIR/log.txt") 2>&1
 chmod +x -R "$GAMEDIR"/*
 
-# Environment variable exports.
 export SDL_GAMECONTROLLERCONFIG="$sdl_controllerconfig"
 export WINEPREFIX="__WINE_PREFIX__"
 export WINEDEBUG=-all
 
-# Graphics and optimization options.
 export DXVK_HUD=__DXVK_HUD__
 export DXVK_ASYNC=__DXVK_ASYNC__
 export STAGING_SHARED_MEMORY=__STAGING_SHARED_MEMORY__
 export STAGING_WRITECOPY=__STAGING_WRITECOPY__
 __BOX64_EXTRA_SETTINGS__
 
-# Sound setup
 __SOUND_SETUP__
 
-# Check if pm_message exists.
 if ! type pm_message &>/dev/null; then
     echo "Warning: pm_message function is missing. Skipping dependency message."
 else
     pm_message "Checking for and installing dependencies..."
 fi
 
-# Config Setup: create config directory and bind to the Wine save folder.
 mkdir -p "$GAMEDIR/config"
 if [ "$(type -t bind_directories)" = "function" ]; then
     bind_directories "$WINEPREFIX/drive_c/users/root/AppData/LocalLow/Andrew Shouldice/Secret Legend" "$GAMEDIR/config"
@@ -410,21 +415,17 @@ else
     echo "Warning: bind_directories function is missing. Skipping config binding."
 fi
 
-# Check that box64, wine64, and GPTOKEYB exist before launching.
-if ! command -v box64 &>/dev/null || ! command -v wine64 &>/dev/null; then
-  echo "Error: box64 or wine64 is missing. Install them before running the game."
-  exit 1
-fi
-if ! command -v __GPTOKEYB__ &>/dev/null; then
-  echo "Error: GPTOKEYB is missing. Install it before running the game."
+# Check that the chosen runner exists before launching.
+if ! command -v __RUN_COMMAND__ &>/dev/null; then
+  echo "Error: The wine runner (__RUN_COMMAND__) is missing. Install it or adjust your settings before running the game."
   exit 1
 fi
 
 # Launch the game:
 # First, launch GPToKeyB for controller mapping.
 __GPTOKEYB__ "__EXE_NAME__" -c "./__GAME_FOLDER__.gptk" &
-# Then launch the game executable from the data folder using box64/wine64.
-box64 wine64 "$GAMEDIR/data/__EXE_PATH__"
+# Then launch the game executable from the data folder using the chosen runner.
+__RUN_COMMAND__ "$GAMEDIR/data/__EXE_PATH__"
 EOF
 
 # ---------------------------
@@ -441,14 +442,8 @@ sed -i "s|__DXVK_ASYNC__|${DXVK_ASYNC}|g" "${LAUNCH_SCRIPT}"
 sed -i "s|__STAGING_SHARED_MEMORY__|${STAGING_SHARED_MEMORY}|g" "${LAUNCH_SCRIPT}"
 sed -i "s|__STAGING_WRITECOPY__|${STAGING_WRITECOPY}|g" "${LAUNCH_SCRIPT}"
 
-# ---------------------------
-# Remove the grouped placeholder.
-# ---------------------------
 sed -i "s|__BOX64_EXTRA_SETTINGS__||g" "${LAUNCH_SCRIPT}"
 
-# ---------------------------
-# Insert extra BOX64 settings before the game launch.
-# ---------------------------
 if [ "$UNITY_OPT" -eq 1 ]; then
     sed -i "/# Launch the game:/i \
 export BOX64_DYNAREC_SAFEFLAGS=1\n\
@@ -465,9 +460,6 @@ export BOX64_MAXCPU=8\n\
 export BOX64_UNITYPLAYER=1" "${LAUNCH_SCRIPT}"
 fi
 
-# ---------------------------
-# Insert Sound Setup Commands
-# ---------------------------
 SOUND_CMD=""
 if [ "$SOUND_OPTION" = "pulse60" ]; then
     SOUND_CMD+="WINEPREFIX=\"${WINE_PREFIX}\" winetricks -q sound=pulse\n"
@@ -478,11 +470,13 @@ elif [ "$SOUND_OPTION" = "pulse90" ]; then
 fi
 
 if [ -n "$SOUND_CMD" ]; then
-    # Use sed to replace the placeholder with the generated commands.
     sed -i "s|__SOUND_SETUP__|${SOUND_CMD}|g" "${LAUNCH_SCRIPT}"
 else
     sed -i "s|__SOUND_SETUP__||g" "${LAUNCH_SCRIPT}"
 fi
+
+# Replace our custom run command placeholder with the chosen RUN_COMMAND.
+sed -i "s|__RUN_COMMAND__|${RUN_COMMAND}|g" "${LAUNCH_SCRIPT}"
 
 chmod +x "${LAUNCH_SCRIPT}"
 
