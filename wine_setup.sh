@@ -11,7 +11,7 @@ DIALOG_MENU="Select a wizard to launch:"
 # Menu options
 OPTIONS=(1 "64-bit Box64 Wine Prefix Wizard"
          2 "32-bit Box86 Wine Prefix Wizard"
-         3 "Wine Custom Downloader")
+         3 "Wine Custom Downloader"
          4 "Wine32 Custom Downloader")
 
 # Display the menu
