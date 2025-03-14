@@ -275,7 +275,7 @@ download_proton_ge() {
 ###############################
 main_menu() {
     local menu_cmd=(dialog --clear --title "Rocknix Wine Downloader" --menu "Select a build category to download:" 15 60 5)
-    local options=(1 "Standard (Vanilla) Builds" 2 "Wine-TKG Builds" 3 "Wine-GE Builds" 4 "Proton-GE Builds" 5 "Exit")
+    local options=(1 "Standard (Vanilla) Builds" 2 "Wine-TKG-Staging Builds" 3 "Wine-GE Builds" 4 "Proton-GE Builds" 5 "Exit")
     local choice
     choice=$("${menu_cmd[@]}" "${options[@]}" 2>&1 >/dev/tty)
     clear
