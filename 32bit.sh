@@ -327,7 +327,7 @@ fi
 # Install the Selected Graphics Compatibility Package
 # ---------------------------
 if [ "$CHOICE" != "none" ]; then
-    WINEPREFIX="${WINE_PREFIX}" winetricks -q "$CHOICE"
+    WINEPREFIX="${WINE_PREFIX}" box86 wine winetricks -q "$CHOICE"
     if [ "$CHOICE" = "dxvk" ] || [ "$CHOICE" = "dxvk2041" ]; then
         if [ ! -f "$WINE_PREFIX/drive_c/windows/system32/dxgi.dll" ]; then
             msgbox "Error" "DXVK installation failed or dxgi.dll is missing. Game may not work properly."
@@ -340,13 +340,13 @@ fi
 # ---------------------------
 if [ -n "$DEP_OPTIONS" ]; then
     for pkg in $DEP_OPTIONS; do
-         WINEPREFIX="${WINE_PREFIX}" winetricks -q "$pkg"
+         WINEPREFIX="${WINE_PREFIX}" box86 wine winetricks -q "$pkg"
     done
 fi
 
 if [ -n "$ADDITIONAL_WT" ]; then
     for pkg in $ADDITIONAL_WT; do
-         WINEPREFIX="${WINE_PREFIX}" winetricks -q "$pkg"
+         WINEPREFIX="${WINE_PREFIX}" box86 wine winetricks -q "$pkg"
     done
 fi
 
@@ -453,10 +453,10 @@ fi
 
 SOUND_CMD=""
 if [ "$SOUND_OPTION" = "pulse60" ]; then
-    SOUND_CMD+="WINEPREFIX=\"${WINE_PREFIX}\" winetricks -q sound=pulse\n"
+    SOUND_CMD+="WINEPREFIX=\"${WINE_PREFIX}\" box86 wine winetricks -q sound=pulse\n"
     SOUND_CMD+="export PULSE_LATENCY_MSEC=60\n"
 elif [ "$SOUND_OPTION" = "pulse90" ]; then
-    SOUND_CMD+="WINEPREFIX=\"${WINE_PREFIX}\" winetricks -q sound=pulse\n"
+    SOUND_CMD+="WINEPREFIX=\"${WINE_PREFIX}\" box86 wine winetricks -q sound=pulse\n"
     SOUND_CMD+="export PULSE_LATENCY_MSEC=90\n"
 fi
 
