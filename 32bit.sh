@@ -15,7 +15,7 @@
 #   - Creates the directory structure and sets up (or modifies) a dedicated/shared 32-bit Wine prefix.
 #   - Generates a launch script that sets up the environment and launches the game.
 #
-# Requirements: dialog, curl, winetricks, wine32, box86.
+# Requirements: dialog, curl, winetricks, wine, box86.
 #
 # Base folders and executable locations
 PORTS_BASE="/storage/roms/ports"
@@ -38,7 +38,8 @@ yesno() {
 # ---------------------------
 # Pre-Setup Dependency Check
 # ---------------------------
-for cmd in wine32 box86 "${GPTOKEYB}"; do
+# For 32-bit, we use "wine" (not wine32) along with box86.
+for cmd in wine box86 "${GPTOKEYB}"; do
     if ! command -v "$cmd" &>/dev/null; then
         msgbox "Error" "Missing dependency: $cmd is not installed. Install it before proceeding."
         exit 1
@@ -46,48 +47,38 @@ for cmd in wine32 box86 "${GPTOKEYB}"; do
 done
 
 # ---------------------------
-# Custom Wine Runner Option
+# Custom Wine Runner Setup (force custom runner)
 # ---------------------------
-CUSTOM_OPTION=$(dialog --stdout --radiolist "Wine Runner Selection" 10 80 2 \
-    "default" "Use system wine32/box86" on \
-    "custom" "Use a custom wine build from /storage/winecustom32" off)
-
-if [ "$CUSTOM_OPTION" = "custom" ]; then
-    # Offer to download custom runners first.
-    yesno "Download Custom Runners" "Would you like to download custom wine runners?"
-    if [ $? -eq 0 ]; then
-         curl -L https://github.com/trashbus99/Rocknix-WINE/raw/main/custom32.sh | bash
-         dialog --msgbox "Custom runners downloaded. Continuing..." 7 50
-    fi
-
-    CUSTOM_OPTIONS=()
-    # Scan /storage/winecustom32 for directories with a bin/wine executable.
-    for d in /storage/winecustom32/*; do
-         if [ -d "$d/bin" ] && [ -x "$d/bin/wine" ]; then
-             foldername=$(basename "$d")
-             CUSTOM_OPTIONS+=("$d/bin/wine" "$foldername" off)
-         fi
-    done
-    if [ ${#CUSTOM_OPTIONS[@]} -eq 0 ]; then
-         dialog --msgbox "No custom wine builds found in /storage/winecustom32. Using system wine32/box86." 10 60
-         CUSTOM_OPTION="default"
-    else
-         CHOSEN_RUNNER=$(dialog --stdout --radiolist "Select custom wine runner:" 15 80 7 "${CUSTOM_OPTIONS[@]}")
-         if [ -z "$CHOSEN_RUNNER" ]; then
-             dialog --msgbox "No selection made. Using system wine32/box86." 10 60
-             CUSTOM_OPTION="default"
-         else
-             WINE_BIN="$CHOSEN_RUNNER"
-         fi
-    fi
+# Offer to download custom runners.
+yesno "Download Custom Runners" "Would you like to download custom wine runners?"
+if [ $? -eq 0 ]; then
+     curl -L https://github.com/trashbus99/Rocknix-WINE/raw/main/custom32.sh | bash
+     dialog --msgbox "Custom runners downloaded. Continuing..." 7 50
 fi
 
-# Define RUN_COMMAND to always use box86.
-if [ "$CUSTOM_OPTION" = "custom" ]; then
-    RUN_COMMAND="box86 ${WINE_BIN}"
+# Scan /storage/winecustom32 for directories with a bin/wine executable.
+CUSTOM_OPTIONS=()
+for d in /storage/winecustom32/*; do
+     if [ -d "$d/bin" ] && [ -x "$d/bin/wine" ]; then
+         foldername=$(basename "$d")
+         CUSTOM_OPTIONS+=("$d/bin/wine" "$foldername" off)
+     fi
+done
+if [ ${#CUSTOM_OPTIONS[@]} -eq 0 ]; then
+     dialog --msgbox "No custom wine builds found in /storage/winecustom32. Please download custom builds using the provided link." 10 60
+     exit 1
 else
-    RUN_COMMAND="box86 wine32"
+     CHOSEN_RUNNER=$(dialog --stdout --radiolist "Select custom wine runner:" 15 80 7 "${CUSTOM_OPTIONS[@]}")
+     if [ -z "$CHOSEN_RUNNER" ]; then
+         dialog --msgbox "No selection made. Exiting." 10 60
+         exit 1
+     else
+         WINE_BIN="$CHOSEN_RUNNER"
+     fi
 fi
+
+# Always use the custom runner.
+RUN_COMMAND="box86 ${WINE_BIN}"
 
 msgbox "Game Port Setup" "This script will create or modify a Wine prefix for your game port."
 yesno "Proceed?" "This will create folders and files under ${PORTS_BASE} and set up a dedicated/shared Wine prefix. Continue?"
@@ -165,7 +156,7 @@ rm -f "$TMPFILE"
 yesno "Executable Location" "Is your game executable located in a subfolder relative to the 'data' folder?\n\n(If 'No', the executable filename will be used directly.)"
 if [ $? -eq 0 ]; then
     TMPFILE=$(mktemp)
-    dialog --inputbox "Enter the relative subfolder path (e.g. bin32):" 8 60 2> "$TMPFILE"
+    dialog --inputbox "Enter the relative subfolder path (e.g. bin):" 8 60 2> "$TMPFILE"
     SUBFOLDER=$(sed -e 's/^[ \t]*//;s/[ \t]*$//' "$TMPFILE")
     rm -f "$TMPFILE"
 else
@@ -320,7 +311,7 @@ echo -e "$GPTK_CONTENT" > "${GPTK_FILE}"
 if [ "$MODE" = "new" ]; then
     if [ ! -d "${WINE_PREFIX}/drive_c" ]; then
         msgbox "Initializing Wine Bottle" "Creating 32-bit Wine prefix at ${WINE_PREFIX}.\n\n(Note: A Wine Mono GUI prompt may appear on the main display.)"
-        WINEPREFIX="${WINE_PREFIX}" wine32 wineboot --init
+        WINEPREFIX="${WINE_PREFIX}" wine wineboot --init
         if [ ! -d "${WINE_PREFIX}/drive_c" ]; then
             msgbox "Error" "Failed to initialize Wine prefix. Setup aborted."
             exit 1
