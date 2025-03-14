@@ -48,13 +48,13 @@ done
 # ---------------------------
 # Custom Wine Runner Option
 # ---------------------------
-CUSTOM_OPTION=$(dialog --stdout --radiolist "Wine Runner Selection" 10 60 2 \
+CUSTOM_OPTION=$(dialog --stdout --radiolist "Wine Runner Selection" 10 80 2 \
     "default" "Use system wine64/box64" on \
     "custom" "Use a custom wine build from /storage/winecustom" off)
 
 if [ "$CUSTOM_OPTION" = "custom" ]; then
     # Offer to download custom runners first.
-    yesno "Download Custom Runners" "Would you like to download custom wine runners?\n\nThis will run:\n\ncurl -L https://github.com/trashbus99/Rocknix-WINE/raw/main/custom.sh | bash"
+    yesno "Download Custom Runners" "Would you like to download custom wine runners?"
     if [ $? -eq 0 ]; then
          curl -L https://github.com/trashbus99/Rocknix-WINE/raw/main/custom.sh | bash
          dialog --msgbox "Custom runners downloaded. Continuing..." 7 50
