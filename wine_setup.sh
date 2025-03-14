@@ -1,8 +1,8 @@
 #!/bin/bash
-LOGFILE="/tmp/wine_prefix_wizard.log"
-exec 2> >(tee -a "$LOGFILE")
-exec > >(tee -a "$LOGFILE")
-set -x  # Optional: enables debugging output
+#LOGFILE="/tmp/wine_prefix_wizard.log"
+#exec 2> >(tee -a "$LOGFILE")
+#exec > >(tee -a "$LOGFILE")
+#set -x  # Optional: enables debugging output
 
 # Title and Menu description
 DIALOG_TITLE="Wine Utilities"
