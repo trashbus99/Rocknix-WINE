@@ -27,7 +27,7 @@ case $CHOICE in
     2)
        echo "Launching custom wine downloader..."
       curl -L https://github.com/trashbus99/Rocknix-WINE/raw/main/custom.sh | bash
-#     ;;
+       ;;
     *)
         echo "No option selected. Exiting."
         ;;
