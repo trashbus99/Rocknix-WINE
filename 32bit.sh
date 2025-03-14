@@ -1,31 +1,25 @@
-#!/bin/bash 
-# setup_wine_port_32.sh
+#!/bin/bash
+# setup_wine_port.sh for Wine32 (box86)
 #
-# This script automates the setup for a generic 32-bit Wine port for a game using Box86.
+# This script automates the setup for a generic Wine port for a game.
 # It:
 #   - Prompts the user to either create a new game/Wine prefix or modify an existing one.
 #   - Offers an option to use a dedicated Wine prefix (less potential conflicts) or a general shared prefix (less bloat).
 #   - For new installs, prompts for the game title, the executable filename (specifically the game-launching exe; do not include any folder), and a subfolder (if applicable).
 #   - Prompts for a graphics compatibility package with the choice to install latest dxvk or legacy dxvk2041 (due to performance regressions), vkd3d, or none.
 #   - Offers options for DXVK HUD (default off), async mode, and separate yes/no prompts for ESYNC and FSYNC.
-#   - Provides a single radiolist for the Pulse Audio option:
-#         * "nopulse" – Do not use Pulse Audio.
-#         * "pulse60" – Use winetricks sound=pulse with 60 ms latency.
-#         * "pulse90" – Use winetricks sound=pulse with 90 ms latency.
+#   - Provides a radiolist for the Pulse Audio option.
 #   - Prompts for installing common VC++ runtimes and DirectX9 (d3dx9_43).
-#   - Optionally asks if the user wants to manually assign keyboard button mappings (for controls like back, start, a, b, etc.).
-#       - If skipped, a default GPTK file with empty mappings is created.
+#   - Optionally asks if the user wants to manually assign keyboard button mappings.
 #   - Then asks if the user wants to install additional winetricks packages.
 #   - Creates the directory structure and sets up (or modifies) a dedicated/shared 32-bit Wine prefix.
 #   - Generates a launch script that sets up the environment and launches the game.
 #
-# Requirements: dialog, curl, winetricks, wine (32-bit), box86.
+# Requirements: dialog, curl, winetricks, wine32, box86.
 #
 # Base folders and executable locations
 PORTS_BASE="/storage/roms/ports"
-# Default dedicated Wine prefixes go here:
 BASE_WINE_PREFIX="/storage/.wine32-setup"
-# General (shared) Wine prefix location:
 GENERAL_WINE_PREFIX="/storage/.wine32-shared"
 GPTOKEYB="/usr/bin/gptokeyb"  # Adjust this path as needed
 
@@ -44,14 +38,58 @@ yesno() {
 # ---------------------------
 # Pre-Setup Dependency Check
 # ---------------------------
-for cmd in wine box86 "${GPTOKEYB}"; do
+for cmd in wine32 box86 "${GPTOKEYB}"; do
     if ! command -v "$cmd" &>/dev/null; then
         msgbox "Error" "Missing dependency: $cmd is not installed. Install it before proceeding."
         exit 1
     fi
 done
 
-msgbox "Game Port Setup" "This script will create or modify a 32-bit Wine prefix for your game port."
+# ---------------------------
+# Custom Wine Runner Option
+# ---------------------------
+CUSTOM_OPTION=$(dialog --stdout --radiolist "Wine Runner Selection" 10 80 2 \
+    "default" "Use system wine32/box86" on \
+    "custom" "Use a custom wine build from /storage/winecustom32" off)
+
+if [ "$CUSTOM_OPTION" = "custom" ]; then
+    # Offer to download custom runners first.
+    yesno "Download Custom Runners" "Would you like to download custom wine runners?"
+    if [ $? -eq 0 ]; then
+         curl -L https://github.com/trashbus99/Rocknix-WINE/raw/main/custom32.sh | bash
+         dialog --msgbox "Custom runners downloaded. Continuing..." 7 50
+    fi
+
+    CUSTOM_OPTIONS=()
+    # Scan /storage/winecustom32 for directories with a bin/wine executable.
+    for d in /storage/winecustom32/*; do
+         if [ -d "$d/bin" ] && [ -x "$d/bin/wine" ]; then
+             foldername=$(basename "$d")
+             CUSTOM_OPTIONS+=("$d/bin/wine" "$foldername" off)
+         fi
+    done
+    if [ ${#CUSTOM_OPTIONS[@]} -eq 0 ]; then
+         dialog --msgbox "No custom wine builds found in /storage/winecustom32. Using system wine32/box86." 10 60
+         CUSTOM_OPTION="default"
+    else
+         CHOSEN_RUNNER=$(dialog --stdout --radiolist "Select custom wine runner:" 15 80 7 "${CUSTOM_OPTIONS[@]}")
+         if [ -z "$CHOSEN_RUNNER" ]; then
+             dialog --msgbox "No selection made. Using system wine32/box86." 10 60
+             CUSTOM_OPTION="default"
+         else
+             WINE_BIN="$CHOSEN_RUNNER"
+         fi
+    fi
+fi
+
+# Define RUN_COMMAND to always use box86.
+if [ "$CUSTOM_OPTION" = "custom" ]; then
+    RUN_COMMAND="box86 ${WINE_BIN}"
+else
+    RUN_COMMAND="box86 wine32"
+fi
+
+msgbox "Game Port Setup" "This script will create or modify a Wine prefix for your game port."
 yesno "Proceed?" "This will create folders and files under ${PORTS_BASE} and set up a dedicated/shared Wine prefix. Continue?"
 if [ $? -ne 0 ]; then
     clear
@@ -108,10 +146,8 @@ if [ "$MODE" = "new" ]; then
     # Ask if user wants a dedicated prefix or a general (shared) one.
     yesno "Prefix Mode" "Do you want to use a dedicated Wine prefix for this game?\n\nDedicated prefixes reduce conflicts, while a general prefix reduces bloat."
     if [ $? -eq 0 ]; then
-        # Use dedicated prefix:
         WINE_PREFIX="${BASE_WINE_PREFIX}/${GAME_FOLDER}"
     else
-        # Use general shared prefix:
         WINE_PREFIX="${GENERAL_WINE_PREFIX}"
     fi
 fi
@@ -119,7 +155,6 @@ fi
 # ---------------------------
 # Common Prompt: Executable and Subfolder
 # ---------------------------
-# Clarify: Enter only the executable filename that launches the game (do not include any folder path).
 DEFAULT_EXE="${GAME_TITLE}.exe"
 TMPFILE=$(mktemp)
 dialog --inputbox "Enter the game executable filename (with extension, e.g. game.exe):" 8 60 "$DEFAULT_EXE" 2> "$TMPFILE"
@@ -163,6 +198,9 @@ else
     DXVK_ASYNC=0
 fi
 
+# ---------------------------
+# Separate Prompts for ESYNC and FSYNC
+# ---------------------------
 yesno "ESYNC" "Do you want to enable ESYNC (Wine's eventfd-based synchronization)?"
 if [ $? -eq 0 ]; then
     STAGING_SHARED_MEMORY=1
@@ -273,6 +311,7 @@ if [ $? -eq 0 ]; then
 else
     GPTK_CONTENT="back = \"\"\nstart = \"\"\na = \"\"\nb = \"\"\nx = \"\"\ny = \"\"\nl1 = \"\"\nl2 = \"\"\nr1 = \"\"\nr2 = \"\"\nup = \"\"\ndown = \"\"\nleft = \"\"\nright = \"\"\nleft_analog_up = \"\"\nleft_analog_down = \"\"\nleft_analog_left = \"\"\nleft_analog_right = \"\"\nright_analog_up = \"\"\nright_analog_down = \"\"\nright_analog_left = \"\"\nright_analog_right = \"\""
 fi
+
 echo -e "$GPTK_CONTENT" > "${GPTK_FILE}"
 
 # ---------------------------
@@ -281,7 +320,7 @@ echo -e "$GPTK_CONTENT" > "${GPTK_FILE}"
 if [ "$MODE" = "new" ]; then
     if [ ! -d "${WINE_PREFIX}/drive_c" ]; then
         msgbox "Initializing Wine Bottle" "Creating 32-bit Wine prefix at ${WINE_PREFIX}.\n\n(Note: A Wine Mono GUI prompt may appear on the main display.)"
-        WINEARCH=win32 WINEPREFIX="${WINE_PREFIX}" wine wineboot --init
+        WINEPREFIX="${WINE_PREFIX}" wine32 wineboot --init
         if [ ! -d "${WINE_PREFIX}/drive_c" ]; then
             msgbox "Error" "Failed to initialize Wine prefix. Setup aborted."
             exit 1
@@ -376,17 +415,17 @@ else
     echo "Warning: bind_directories function is missing. Skipping config binding."
 fi
 
-if ! command -v box86 &>/dev/null || ! command -v wine &>/dev/null; then
-  echo "Error: box86 or wine is missing. Install them before running the game."
-  exit 1
-fi
-if ! command -v __GPTOKEYB__ &>/dev/null; then
-  echo "Error: GPTOKEYB is missing. Install it before running the game."
+# Check that the chosen runner exists before launching.
+if ! command -v __RUN_COMMAND__ &>/dev/null; then
+  echo "Error: The wine runner (__RUN_COMMAND__) is missing. Install it or adjust your settings before running the game."
   exit 1
 fi
 
+# Launch the game:
+# First, launch GPToKeyB for controller mapping.
 __GPTOKEYB__ "__EXE_NAME__" -c "./__GAME_FOLDER__.gptk" &
-box86 wine "$GAMEDIR/data/__EXE_PATH__"
+# Then launch the game executable from the data folder using the chosen runner.
+__RUN_COMMAND__ "$GAMEDIR/data/__EXE_PATH__"
 EOF
 
 # ---------------------------
@@ -435,6 +474,9 @@ if [ -n "$SOUND_CMD" ]; then
 else
     sed -i "s|__SOUND_SETUP__||g" "${LAUNCH_SCRIPT}"
 fi
+
+# Replace our custom run command placeholder with the chosen RUN_COMMAND.
+sed -i "s|__RUN_COMMAND__|${RUN_COMMAND}|g" "${LAUNCH_SCRIPT}"
 
 chmod +x "${LAUNCH_SCRIPT}"
 
