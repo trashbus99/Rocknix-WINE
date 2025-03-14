@@ -5,8 +5,8 @@
 # It:
 #   - Prompts the user to either create a new game/Wine prefix or modify an existing one.
 #   - Offers an option to use a dedicated Wine prefix (less potential conflicts) or a general shared prefix (less bloat).
-#   - For new installs, prompts for the game title, the executable filename (specifically the game-launching exe; do not include any folder), and a subfolder (if applicable).
-#   - Prompts for a graphics compatibility package with the choice to install latest dxvk or legacy dxvk2041 (due to performance regressions), vkd3d, or none.
+#   - For new installs, prompts for the game title, the executable filename (the game-launching exe; do not include any folder), and a subfolder (if applicable).
+#   - Prompts for a graphics compatibility package with the choice to install latest dxvk or legacy dxvk2041, vkd3d, or none.
 #   - Offers options for DXVK HUD (default off), async mode, and separate yes/no prompts for ESYNC and FSYNC.
 #   - Provides a radiolist for the Pulse Audio option.
 #   - Prompts for installing common VC++ runtimes and DirectX9 (d3dx9_43).
@@ -15,7 +15,7 @@
 #   - Creates the directory structure and sets up (or modifies) a dedicated/shared 32-bit Wine prefix.
 #   - Generates a launch script that sets up the environment and launches the game.
 #
-# Requirements: dialog, curl, winetricks, wine, box86.
+# Requirements: dialog, curl, winetricks (downloaded version), wine, box86.
 #
 # Base folders and executable locations
 PORTS_BASE="/storage/roms/ports"
@@ -45,6 +45,15 @@ for cmd in wine box86 "${GPTOKEYB}"; do
         exit 1
     fi
 done
+
+# ---------------------------
+# Download a 32-bit–friendly winetricks script (if not already present)
+# ---------------------------
+WINETRICKS_SCRIPT="/tmp/winetricks32.sh"
+if [ ! -f "$WINETRICKS_SCRIPT" ]; then
+    curl -L https://raw.githubusercontent.com/Winetricks/winetricks/master/src/winetricks -o "$WINETRICKS_SCRIPT"
+    chmod +x "$WINETRICKS_SCRIPT"
+fi
 
 # ---------------------------
 # Custom Wine Runner Setup (force custom runner)
@@ -79,6 +88,10 @@ fi
 
 # Always use the custom runner.
 RUN_COMMAND="box86 ${WINE_BIN}"
+
+# Force winetricks to use our custom runner and a 32-bit environment.
+export WINETRICKS_WINE="${RUN_COMMAND}"
+export WINEARCH=win32
 
 msgbox "Game Port Setup" "This script will create or modify a Wine prefix for your game port."
 yesno "Proceed?" "This will create folders and files under ${PORTS_BASE} and set up a dedicated/shared Wine prefix. Continue?"
@@ -311,7 +324,8 @@ echo -e "$GPTK_CONTENT" > "${GPTK_FILE}"
 if [ "$MODE" = "new" ]; then
     if [ ! -d "${WINE_PREFIX}/drive_c" ]; then
         msgbox "Initializing Wine Bottle" "Creating 32-bit Wine prefix at ${WINE_PREFIX}.\n\n(Note: A Wine Mono GUI prompt may appear on the main display.)"
-        WINEPREFIX="${WINE_PREFIX}" wine wineboot --init
+        # Explicitly call your custom wine with box86, forcing WINEARCH=win32.
+        WINEPREFIX="${WINE_PREFIX}" WINEARCH=win32 $RUN_COMMAND wineboot --init
         if [ ! -d "${WINE_PREFIX}/drive_c" ]; then
             msgbox "Error" "Failed to initialize Wine prefix. Setup aborted."
             exit 1
@@ -327,7 +341,7 @@ fi
 # Install the Selected Graphics Compatibility Package
 # ---------------------------
 if [ "$CHOICE" != "none" ]; then
-    WINEPREFIX="${WINE_PREFIX}" box86 wine winetricks -q "$CHOICE"
+    WINEPREFIX="${WINE_PREFIX}" bash "$WINETRICKS_SCRIPT" -q "$CHOICE"
     if [ "$CHOICE" = "dxvk" ] || [ "$CHOICE" = "dxvk2041" ]; then
         if [ ! -f "$WINE_PREFIX/drive_c/windows/system32/dxgi.dll" ]; then
             msgbox "Error" "DXVK installation failed or dxgi.dll is missing. Game may not work properly."
@@ -340,13 +354,13 @@ fi
 # ---------------------------
 if [ -n "$DEP_OPTIONS" ]; then
     for pkg in $DEP_OPTIONS; do
-         WINEPREFIX="${WINE_PREFIX}" box86 wine winetricks -q "$pkg"
+         WINEPREFIX="${WINE_PREFIX}" bash "$WINETRICKS_SCRIPT" -q "$pkg"
     done
 fi
 
 if [ -n "$ADDITIONAL_WT" ]; then
     for pkg in $ADDITIONAL_WT; do
-         WINEPREFIX="${WINE_PREFIX}" box86 wine winetricks -q "$pkg"
+         WINEPREFIX="${WINE_PREFIX}" bash "$WINETRICKS_SCRIPT" -q "$pkg"
     done
 fi
 
@@ -432,7 +446,6 @@ sed -i "s|__DXVK_HUD__|${HUD_CHOICE}|g" "${LAUNCH_SCRIPT}"
 sed -i "s|__DXVK_ASYNC__|${DXVK_ASYNC}|g" "${LAUNCH_SCRIPT}"
 sed -i "s|__STAGING_SHARED_MEMORY__|${STAGING_SHARED_MEMORY}|g" "${LAUNCH_SCRIPT}"
 sed -i "s|__STAGING_WRITECOPY__|${STAGING_WRITECOPY}|g" "${LAUNCH_SCRIPT}"
-
 sed -i "s|__BOX86_EXTRA_SETTINGS__||g" "${LAUNCH_SCRIPT}"
 
 if [ "$UNITY_OPT" -eq 1 ]; then
@@ -453,10 +466,10 @@ fi
 
 SOUND_CMD=""
 if [ "$SOUND_OPTION" = "pulse60" ]; then
-    SOUND_CMD+="WINEPREFIX=\"${WINE_PREFIX}\" box86 wine winetricks -q sound=pulse\n"
+    SOUND_CMD+="WINEPREFIX=\"${WINE_PREFIX}\" bash $WINETRICKS_SCRIPT -q sound=pulse\n"
     SOUND_CMD+="export PULSE_LATENCY_MSEC=60\n"
 elif [ "$SOUND_OPTION" = "pulse90" ]; then
-    SOUND_CMD+="WINEPREFIX=\"${WINE_PREFIX}\" box86 wine winetricks -q sound=pulse\n"
+    SOUND_CMD+="WINEPREFIX=\"${WINE_PREFIX}\" bash $WINETRICKS_SCRIPT -q sound=pulse\n"
     SOUND_CMD+="export PULSE_LATENCY_MSEC=90\n"
 fi
 
