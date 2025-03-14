@@ -9,8 +9,8 @@ DIALOG_TITLE="Wine Utilities"
 DIALOG_MENU="Select a wizard to launch:"
 
 # Menu options
-OPTIONS=(1 "64-bit Box86 Wine Prefix Wizard")
-#         2 "32-bit Box64 Wine64 Prefix Wizard")
+OPTIONS=(1 "64-bit Box86 Wine Prefix Wizard"
+         2 "Wine Custom Downloader")
 
 # Display the menu
 CHOICE=$(dialog --clear --title "$DIALOG_TITLE" --menu "$DIALOG_MENU" 15 50 2 "${OPTIONS[@]}" 2>&1 >/dev/tty)
@@ -24,9 +24,9 @@ case $CHOICE in
         echo "Launching 64-bit Box64 Wine Prefix Wizard..."
         curl -L https://github.com/trashbus99/Rocknix-WINE/raw/main/64bit.sh | bash
         ;;
-   # 2)
-   #     echo "Launching 32-bit Box64 Wine64 Prefix Wizard..."
-   #    curl -L https://github.com/trashbus99/Rocknix-WINE/raw/main/32bit.sh | bash
+    2)
+       echo "Launching custom wine downloader..."
+      curl -L https://github.com/trashbus99/Rocknix-WINE/raw/main/custom.sh | bash
 #     ;;
     *)
         echo "No option selected. Exiting."
