@@ -25,9 +25,9 @@ case $CHOICE in
         curl -L https://github.com/trashbus99/Rocknix-WINE/raw/main/64bit.sh | bash
         ;;
    # 2)
-        echo "Launching 32-bit Box64 Wine64 Prefix Wizard..."
-        curl -L https://github.com/trashbus99/Rocknix-WINE/raw/main/32bit.sh | bash
-        ;;
+   #     echo "Launching 32-bit Box64 Wine64 Prefix Wizard..."
+   #    curl -L https://github.com/trashbus99/Rocknix-WINE/raw/main/32bit.sh | bash
+#     ;;
     *)
         echo "No option selected. Exiting."
         ;;
